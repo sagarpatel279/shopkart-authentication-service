@@ -69,6 +69,13 @@
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- https://mvnrepository.com/artifact/com.codingapi.security/springboot-starter-security-jwt -->
+        <dependency>
+            <groupId>com.codingapi.security</groupId>
+            <artifactId>springboot-starter-security-jwt</artifactId>
+            <version>0.0.7</version>
+        </dependency>
+
     </dependencies>
 
     <build>
