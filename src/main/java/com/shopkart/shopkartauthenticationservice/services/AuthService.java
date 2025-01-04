@@ -1,5 +1,6 @@
 package com.shopkart.shopkartauthenticationservice.services;
 
+import com.shopkart.shopkartauthenticationservice.exceptions.UnAuthorizedException;
 import com.shopkart.shopkartauthenticationservice.exceptions.UserAlreadyExistException;
 import com.shopkart.shopkartauthenticationservice.exceptions.UserNotFoundException;
 import com.shopkart.shopkartauthenticationservice.models.User;
@@ -24,12 +25,14 @@ public class AuthService {
         this.bCryptPasswordEncoder = bCryptPasswordEncoder;
     }
 
-    public String login(String email, String password) throws UserNotFoundException {
-        boolean isUserExist=userRepository.existsByEmail(email);
-        if(!isUserExist){
+    public String login(String email, String password) throws UserNotFoundException, UnAuthorizedException {
+        Optional<User> userOptional=userRepository.findByEmail(email);
+        if(userOptional.isEmpty()){
             throw new UserNotFoundException("User not found");
         }
-
+        if(!bCryptPasswordEncoder.matches(password, userOptional.get().getPasswordSalt())){
+            throw new UnAuthorizedException("Invalid Password..!");
+        }
         return "token";
     }
     public boolean signUp(String email, String password) throws UserAlreadyExistException {
