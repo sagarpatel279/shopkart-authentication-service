@@ -1,6 +1,8 @@
 package com.shopkart.shopkartauthenticationservice.controllers;
 
 import com.shopkart.shopkartauthenticationservice.dtos.*;
+import com.shopkart.shopkartauthenticationservice.dtos.ResponseStatus;
+import com.shopkart.shopkartauthenticationservice.exceptions.SessionExpiredException;
 import com.shopkart.shopkartauthenticationservice.exceptions.UnAuthorizedException;
 import com.shopkart.shopkartauthenticationservice.exceptions.UserAlreadyExistException;
 import com.shopkart.shopkartauthenticationservice.exceptions.UserNotFoundException;
@@ -11,10 +13,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/auth")
@@ -34,7 +33,7 @@ public class AuthenticationController {
             loginResponseDto.setMessage("Login successful");
             loginResponseDto.setResponseStatus(ResponseStatus.SUCCESS);
             MultiValueMap<String, String> headers = new LinkedMultiValueMap<>();
-            headers.add("Authorization", token);
+            headers.add("AUTH_TOKEN", token);
             return new ResponseEntity<LoginResponseDto>(loginResponseDto,headers, HttpStatus.OK);
         }catch (UnAuthorizedException uae){
             loginResponseDto.setMessage(uae.getMessage());
@@ -48,6 +47,45 @@ public class AuthenticationController {
             loginResponseDto.setMessage("Something went wrong");
             loginResponseDto.setResponseStatus(ResponseStatus.FAILURE);
             return new ResponseEntity<LoginResponseDto>(loginResponseDto, HttpStatus.BAD_GATEWAY);
+        }
+    }
+    @PostMapping("/logout")
+    public ResponseEntity<?> doLogout() {
+        return null;
+    }
+    @PostMapping("/validate")
+    public ResponseEntity<ValidateTokenResponseDto> isTokenValid(@RequestHeader(value = "AUTH_TOKEN") String token){
+        ValidateTokenResponseDto responseDto = new ValidateTokenResponseDto();
+        if(token==null || token.isEmpty()){
+            responseDto.setMessage("Invalid token");
+            responseDto.setResponseStatus(ResponseStatus.INVALID_CREDENTIALS);
+            return new ResponseEntity<>(responseDto, HttpStatus.BAD_REQUEST);
+        }
+        try {
+            if(authService.validateToken(token)) {
+                responseDto.setMessage("ok");
+                responseDto.setResponseStatus(ResponseStatus.SUCCESS);
+                return new ResponseEntity<>(responseDto, HttpStatus.OK);
+            }
+            responseDto.setMessage("Invalid token");
+            responseDto.setResponseStatus(ResponseStatus.INVALID_CREDENTIALS);
+            return new ResponseEntity<>(responseDto, HttpStatus.BAD_REQUEST);
+        }catch (UnAuthorizedException ue){
+            responseDto.setMessage(ue.getMessage());
+            responseDto.setResponseStatus(ResponseStatus.INVALID_CREDENTIALS);
+            return new ResponseEntity<>(responseDto, HttpStatus.BAD_GATEWAY);
+        }catch (SessionExpiredException se){
+            responseDto.setMessage(se.getMessage());
+            responseDto.setResponseStatus(ResponseStatus.FAILURE);
+            return new ResponseEntity<>(responseDto, HttpStatus.GATEWAY_TIMEOUT);
+        }catch (RuntimeException re){
+            responseDto.setMessage(re.getMessage());
+            responseDto.setResponseStatus(ResponseStatus.FAILURE);
+            return new ResponseEntity<>(responseDto, HttpStatus.BAD_GATEWAY);
+        }catch (Exception e){
+            responseDto.setMessage("Something went wrong");
+            responseDto.setResponseStatus(ResponseStatus.FAILURE);
+            return new ResponseEntity<>(responseDto, HttpStatus.BAD_GATEWAY);
         }
     }
 

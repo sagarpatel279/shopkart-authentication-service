@@ -14,7 +14,6 @@ public class Session extends BaseModel{
     private String token;
     @ManyToOne
     private User user;
-    private Date expiryDate;
     private String ipAddress;
     private String deviceId;
 }
