@@ -50,8 +50,39 @@ public class AuthenticationController {
         }
     }
     @PostMapping("/logout")
-    public ResponseEntity<?> doLogout() {
-        return null;
+    public ResponseEntity<ValidateTokenResponseDto> doLogout(@RequestHeader(value = "AUTH_TOKEN") String token) {
+        ValidateTokenResponseDto responseDto = new ValidateTokenResponseDto();
+        if(token==null || token.isEmpty()){
+            responseDto.setMessage("Invalid token");
+            responseDto.setResponseStatus(ResponseStatus.INVALID_CREDENTIALS);
+            return new ResponseEntity<>(responseDto, HttpStatus.BAD_REQUEST);
+        }
+        try {
+            if(authService.logout(token)){
+                responseDto.setMessage("Logout successful");
+                responseDto.setResponseStatus(ResponseStatus.SUCCESS);
+                return new ResponseEntity<>(responseDto, HttpStatus.OK);
+            }
+            responseDto.setMessage("Logout failed");
+            responseDto.setResponseStatus(ResponseStatus.FAILURE);
+            return new ResponseEntity<>(responseDto, HttpStatus.BAD_REQUEST);
+        }catch (UnAuthorizedException ue){
+            responseDto.setMessage(ue.getMessage());
+            responseDto.setResponseStatus(ResponseStatus.INVALID_CREDENTIALS);
+            return new ResponseEntity<>(responseDto, HttpStatus.BAD_GATEWAY);
+        }catch (SessionExpiredException se){
+            responseDto.setMessage(se.getMessage());
+            responseDto.setResponseStatus(ResponseStatus.FAILURE);
+            return new ResponseEntity<>(responseDto, HttpStatus.GATEWAY_TIMEOUT);
+        }catch (RuntimeException re){
+            responseDto.setMessage(re.getMessage());
+            responseDto.setResponseStatus(ResponseStatus.FAILURE);
+            return new ResponseEntity<>(responseDto, HttpStatus.BAD_GATEWAY);
+        }catch (Exception e){
+            responseDto.setMessage("Something went wrong");
+            responseDto.setResponseStatus(ResponseStatus.FAILURE);
+            return new ResponseEntity<>(responseDto, HttpStatus.BAD_GATEWAY);
+        }
     }
     @PostMapping("/validate")
     public ResponseEntity<ValidateTokenResponseDto> isTokenValid(@RequestHeader(value = "AUTH_TOKEN") String token){

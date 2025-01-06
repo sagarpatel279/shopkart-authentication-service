@@ -19,11 +19,11 @@ import java.util.*;
 
 @Service
 public class AuthService {
-    private UserRepository userRepository;
-    private RoleRepository roleRepository;
-    private SessionRepository sessionRepository;
-    private BCryptPasswordEncoder bCryptPasswordEncoder;
-    private SecretKey key= Jwts.SIG.HS256.key().build();
+    private final UserRepository userRepository;
+    private final RoleRepository roleRepository;
+    private final SessionRepository sessionRepository;
+    private final BCryptPasswordEncoder bCryptPasswordEncoder;
+    private final SecretKey key= Jwts.SIG.HS256.key().build();
     public AuthService(UserRepository userRepository, RoleRepository roleRepository, SessionRepository sessionRepository, BCryptPasswordEncoder bCryptPasswordEncoder) {
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
@@ -49,38 +49,19 @@ public class AuthService {
         return jwsToken;
     }
 
-    public boolean validateToken(String token) throws UnAuthorizedException,SessionExpiredException {
-        try {
-            // Parse the token
-            Jws<Claims> claims = Jwts.parser()
-                    .setSigningKey(key) // Ensure 'key' is properly initialized and accessible
-                    .build()
-                    .parseClaimsJws(token);
-
-            // Check for expiration
-            Date expiration = claims.getBody().getExpiration();
-            if (expiration.before(new Date())) {
-                throw new UnAuthorizedException("Token has expired.");
-            }
-            Long sessionId= claims.getBody().get("sid",Long.class);
+    public boolean validateToken(String token) throws SessionExpiredException, UnAuthorizedException {
+        Claims claims=validateAndGetClaims(token);
+        if(claims!=null){
+            Long sessionId= claims.get("sid",Long.class);
             Optional<Session> sessionOptional=sessionRepository.findById(sessionId);
-            if(sessionOptional.isEmpty()){
-                throw new SessionExpiredException("Session is Expired");
+            if(sessionOptional.isEmpty() || sessionOptional.get().getIsDeleted()){
+                throw new SessionExpiredException("Session is no longer available");
             }
-            Session session=sessionOptional.get();
-            if(session.getIsDeleted()){
-                throw new SessionExpiredException("Session is Expired");
-            }
-            return true; // Token is valid
-        } catch (JwtException e) {
-            // Handles malformed token, signature errors, etc.
-            throw new RuntimeException("Invalid token: " + e.getMessage(), e);
-        } catch (Exception e) {
-            // Catch any other unexpected exceptions
-            throw new RuntimeException("An error occurred while validating the token.", e);
+            return true;
         }
+        return false;
     }
-    private String createJWTToken(Long userId,String email,List<Role> roles,Long sessionId) throws UnAuthorizedException {
+    private String createJWTToken(Long userId,String email,List<Role> roles,Long sessionId) {
         Map<String,Object> map = new HashMap<>();
         map.put("uid", userId);
         map.put("email", email);
@@ -93,6 +74,58 @@ public class AuthService {
                 .expiration(expiryDate)
                 .issuedAt(new Date()).signWith(key).compact();
 
+    }
+
+    public boolean logout(String token) throws UnAuthorizedException,SessionExpiredException {
+        try {
+            Claims claims= validateAndGetClaims(token);
+            if(claims==null){
+                throw new UnAuthorizedException("Invalid Token");
+            }
+            Long sessionId=claims.get("sid",Long.class);
+            Optional<Session> sessionOptional=sessionRepository.findById(sessionId);
+            if(sessionOptional.isEmpty() || sessionOptional.get().getIsDeleted()){
+                throw new SessionExpiredException("Session is no longer available");
+            }
+            Session session=sessionOptional.get();
+            session.setIsDeleted(true);
+            sessionRepository.save(session);
+            return true;
+        }catch (Exception e){
+            throw new RuntimeException("An error occurred while logging out.");
+        }
+    }
+    private Claims validateAndGetClaims(String token){
+        try {
+            // Parse the token
+            Jws<Claims> jwsClaims = Jwts.parser()
+                    .setSigningKey(key) // Ensure 'key' is properly initialized and accessible
+                    .build()
+                    .parseClaimsJws(token);
+            Claims claims=jwsClaims.getBody();
+            if(validateTokenExpiration(claims))
+                return claims;
+
+            return null; // Token is valid
+        } catch (JwtException e) {
+            // Handles malformed token, signature errors, etc.
+            throw new RuntimeException("Invalid token: " + e.getMessage(), e);
+        } catch (Exception e) {
+            // Catch any other unexpected exceptions
+            throw new RuntimeException("An error occurred while validating the token.", e);
+        }
+    }
+    private boolean validateTokenExpiration(Claims claims) throws SessionExpiredException {
+        try {
+            // Check for expiration
+            Date expiration = claims.getExpiration();
+            if (expiration.before(new Date())) {
+                throw new SessionExpiredException("Token has expired.");
+            }
+            return true;
+        }catch (Exception e){
+            throw new RuntimeException("An error occurred while checking token expiration.");
+        }
     }
     public boolean signUp(String email, String password) throws UserAlreadyExistException {
         boolean isUserExist=userRepository.existsByEmail(email);
