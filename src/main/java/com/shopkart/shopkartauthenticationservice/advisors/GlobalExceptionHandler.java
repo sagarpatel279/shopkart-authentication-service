@@ -9,14 +9,13 @@ import com.shopkart.shopkartauthenticationservice.exceptions.UserNotFoundExcepti
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-@ControllerAdvice
-@Order(1)
+@RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    @ExceptionHandler(UserAlreadyExistException.class)
+    @ExceptionHandler(UnAuthorizedException.class)
     public ResponseEntity<?> handleUnauthorizedException(UnAuthorizedException une) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiResponse<>("UnAuthorized",une.getMessage(), ResponseStatus.INVALID_CREDENTIALS));
     }

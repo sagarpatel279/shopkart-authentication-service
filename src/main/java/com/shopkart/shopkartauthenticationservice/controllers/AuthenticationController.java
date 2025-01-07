@@ -3,6 +3,7 @@ package com.shopkart.shopkartauthenticationservice.controllers;
 import com.shopkart.shopkartauthenticationservice.dtos.ResponseStatus;
 import com.shopkart.shopkartauthenticationservice.dtos.*;
 import com.shopkart.shopkartauthenticationservice.services.AuthService;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -20,9 +21,14 @@ public class AuthenticationController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<?> doLogin(@RequestBody LoginRequestDto loginRequestDto) {
+    public ResponseEntity<?> doLogin(@RequestBody LoginRequestDto loginRequestDto, HttpServletRequest httpServletRequest) {
         LoginResponseDto loginResponseDto = new LoginResponseDto();
-        String token = authService.login(loginRequestDto.getEmail(), loginRequestDto.getPassword());
+        String ipAddr = httpServletRequest.getHeader("X-Forwarded-For");
+        if (ipAddr == null || ipAddr.isEmpty()) {
+            ipAddr = httpServletRequest.getRemoteAddr();
+        }
+        System.out.println("IP Address: " + ipAddr);
+        String token = authService.login(loginRequestDto.getEmail(), loginRequestDto.getPassword(),ipAddr);
         loginResponseDto.setMessage("Login successful");
         loginResponseDto.setResponseStatus(ResponseStatus.SUCCESS);
         MultiValueMap<String, String> headers = new LinkedMultiValueMap<>();
@@ -57,9 +63,9 @@ public class AuthenticationController {
             responseDto.setResponseStatus(ResponseStatus.SUCCESS);
             return new ResponseEntity<>(responseDto, HttpStatus.OK);
         }
-        responseDto.setMessage("Invalid token");
-        responseDto.setResponseStatus(ResponseStatus.INVALID_CREDENTIALS);
-        return new ResponseEntity<>(responseDto, HttpStatus.BAD_REQUEST);
+        responseDto.setMessage("Expired token");
+        responseDto.setResponseStatus(ResponseStatus.FAILURE);
+        return new ResponseEntity<>(responseDto, HttpStatus.GATEWAY_TIMEOUT);
     }
 
     @PostMapping("/sign_up")
