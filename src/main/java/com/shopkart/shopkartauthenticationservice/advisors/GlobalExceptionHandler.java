@@ -1,42 +1,43 @@
 package com.shopkart.shopkartauthenticationservice.advisors;
 
-import com.shopkart.shopkartauthenticationservice.dtos.ErrorResponse;
+import com.shopkart.shopkartauthenticationservice.dtos.ApiResponse;
+import com.shopkart.shopkartauthenticationservice.dtos.ResponseStatus;
 import com.shopkart.shopkartauthenticationservice.exceptions.SessionExpiredException;
 import com.shopkart.shopkartauthenticationservice.exceptions.UnAuthorizedException;
 import com.shopkart.shopkartauthenticationservice.exceptions.UserAlreadyExistException;
 import com.shopkart.shopkartauthenticationservice.exceptions.UserNotFoundException;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 
 @ControllerAdvice
+@Order(1)
 public class GlobalExceptionHandler {
 
-    @ExceptionHandler(UnAuthorizedException.class)
-    public ResponseEntity<ErrorResponse> handleUnauthorizedException(UnAuthorizedException unAuthorizedException) {
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ErrorResponse("Unauthorized",unAuthorizedException.getMessage()));
+    @ExceptionHandler(UserAlreadyExistException.class)
+    public ResponseEntity<?> handleUnauthorizedException(UnAuthorizedException une) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiResponse<>("UnAuthorized",une.getMessage(), ResponseStatus.INVALID_CREDENTIALS));
     }
 
     @ExceptionHandler(SessionExpiredException.class)
-    public ResponseEntity<ErrorResponse> handleUnauthorizedException(SessionExpiredException sessionExpiredException) {
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ErrorResponse("Session",sessionExpiredException.getMessage()));
+    public ResponseEntity<?> handleSessionExpiredException(SessionExpiredException see) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>("Expired Session",see.getMessage(),ResponseStatus.FAILURE));
     }
+
     @ExceptionHandler(UserAlreadyExistException.class)
-    public ResponseEntity<ErrorResponse> handleUserDuplicate(UserAlreadyExistException userAlreadyExistException) {
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErrorResponse("Duplicate",userAlreadyExistException.getMessage()));
+    public ResponseEntity<?> handleUserAlreadyExistException(UserAlreadyExistException uee) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiResponse<>("Duplicate Record",uee.getMessage(),ResponseStatus.FAILURE));
     }
 
     @ExceptionHandler(UserNotFoundException.class)
-    public ResponseEntity<ErrorResponse> handleUserNotFoundException(UserNotFoundException userNotFoundException) {
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ErrorResponse("Null",userNotFoundException.getMessage()));
+    public ResponseEntity<?> handleUserNotFoundException(UserNotFoundException userNotFound) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ApiResponse<>("Not Found",userNotFound.getMessage(),ResponseStatus.FAILURE));
     }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ErrorResponse> handleException(Exception exception) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ErrorResponse("Null",exception.getMessage()));
+    public ResponseEntity<?> handleGenericException(Exception e) {
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(new ApiResponse<>("Bad Gateway","Something Went Wrong",ResponseStatus.FAILURE));
     }
-
-
-
 }
