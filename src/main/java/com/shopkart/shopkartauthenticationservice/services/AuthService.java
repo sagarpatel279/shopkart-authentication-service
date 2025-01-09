@@ -13,6 +13,10 @@ import com.shopkart.shopkartauthenticationservice.repositories.UserRepository;
 import com.shopkart.shopkartauthenticationservice.utilities.JwtUtil;
 import com.shopkart.shopkartauthenticationservice.utilities.UUIDGenerator;
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.JwtException;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -21,17 +25,21 @@ import java.util.*;
 
 @Service
 public class AuthService {
-    private UserRepository userRepository;
-    private RoleRepository roleRepository;
-    private SessionRepository sessionRepository;
-    private BCryptPasswordEncoder bCryptPasswordEncoder;
+    private final UserRepository userRepository;
+    private final RoleRepository roleRepository;
+    private final SessionRepository sessionRepository;
+    private final BCryptPasswordEncoder bCryptPasswordEncoder;
     private JwtUtil jwtUtil;
 
-    public AuthService(UserRepository userRepository, RoleRepository roleRepository, SessionRepository sessionRepository, BCryptPasswordEncoder bCryptPasswordEncoder, JwtUtil jwtUtil) {
+    public AuthService(UserRepository userRepository, RoleRepository roleRepository, SessionRepository sessionRepository, BCryptPasswordEncoder bCryptPasswordEncoder) {
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
         this.sessionRepository = sessionRepository;
         this.bCryptPasswordEncoder = bCryptPasswordEncoder;
+    }
+
+    @Autowired
+    public void setJwtUtil(JwtUtil jwtUtil) {
         this.jwtUtil = jwtUtil;
     }
 
@@ -58,9 +66,9 @@ public class AuthService {
                         sessionRepository.save(session);
                     }
                 }
-                Session session=sessions.get(0);
-                String token=session.getToken();
-                if(jwtUtil.isTokenValid(token)){
+                Session session = sessions.get(0);
+                String token = session.getToken();
+                if (jwtUtil.isTokenValid(token)) {
                     return token;
                 }
                 throw new SessionExpiredException("Session Expired..!");
@@ -88,8 +96,15 @@ public class AuthService {
         Claims claims = null;
         try {
             claims = jwtUtil.getClaimsFromToken(token);
-        } catch (Exception e) {
+        } catch (ExpiredJwtException jwe) {
+            Long sessionId = jwe.getClaims().get("sid", Long.class);
+            if (deleteTokenFromDb(sessionId))
+                throw new SessionExpiredException("Session Expired..!");
             throw new UnAuthorizedException("Invalid token");
+        } catch (JwtException je) {
+            throw new UnAuthorizedException("Invalid token");
+        } catch (Exception e) {
+            throw new RuntimeException("Something went wrong!");
         }
         if (claims == null) {
             throw new UnAuthorizedException("Invalid Token");
@@ -106,14 +121,21 @@ public class AuthService {
     }
 
     public boolean validateToken(String token) {
-        if(!jwtUtil.isTokenValid(token)){
+        if (!jwtUtil.isTokenValid(token)) {
             return false;
         }
         Claims claims = null;
         try {
             claims = jwtUtil.getClaimsFromToken(token);
-        } catch (Exception e) {
+        }catch (ExpiredJwtException jwe) {
+            Long sessionId = jwe.getClaims().get("sid", Long.class);
+            if (deleteTokenFromDb(sessionId))
+                throw new SessionExpiredException("Session Expired..!");
             throw new UnAuthorizedException("Invalid token");
+        } catch (JwtException je) {
+            throw new UnAuthorizedException("Invalid token");
+        } catch (Exception e) {
+            throw new RuntimeException("Something went Wrong..!");
         }
         if (claims == null) {
             throw new UnAuthorizedException("Invalid Token");
@@ -136,5 +158,16 @@ public class AuthService {
         user.setPasswordSalt(bCryptPasswordEncoder.encode(password));
         userRepository.save(user);
         return true;
+    }
+
+    public boolean deleteTokenFromDb(Long sessionId) {
+        Optional<Session> sessionOptional = sessionRepository.findById(sessionId);
+        if (sessionOptional.isPresent() && !sessionOptional.get().getIsDeleted()) {
+            Session session = sessionOptional.get();
+            session.setIsDeleted(true);
+            sessionRepository.save(session);
+            return true;
+        }
+        return false;
     }
 }
