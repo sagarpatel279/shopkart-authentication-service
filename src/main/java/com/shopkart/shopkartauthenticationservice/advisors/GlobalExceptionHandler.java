@@ -27,7 +27,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(UserAlreadyExistException.class)
     public ResponseEntity<?> handleUserAlreadyExistException(UserAlreadyExistException uee) {
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiResponse<>("Duplicate Record",uee.getMessage(),ResponseStatus.FAILURE));
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiResponse<>("Data Exist",uee.getMessage(),ResponseStatus.FAILURE));
     }
 
     @ExceptionHandler(UserNotFoundException.class)
