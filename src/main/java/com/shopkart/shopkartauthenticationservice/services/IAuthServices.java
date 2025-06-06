@@ -1,6 +1,6 @@
 package com.shopkart.shopkartauthenticationservice.services;
 
-public interface AuthenticationServices {
+public interface IAuthServices {
     String login(String email, String password, String ipAddr);
     void logout(String token);
     boolean validateToken(String token);

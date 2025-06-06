@@ -2,7 +2,7 @@ package com.shopkart.shopkartauthenticationservice.controllers;
 
 import com.shopkart.shopkartauthenticationservice.dtos.ResponseStatus;
 import com.shopkart.shopkartauthenticationservice.dtos.*;
-import com.shopkart.shopkartauthenticationservice.services.AuthService;
+import com.shopkart.shopkartauthenticationservice.services.AuthServiceImpl;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -13,11 +13,11 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/auth")
 public class AuthenticationController {
-    private AuthService authService;
+    private AuthServiceImpl authServiceImpl;
 
     @Autowired
-    public AuthenticationController(AuthService authService) {
-        this.authService = authService;
+    public AuthenticationController(AuthServiceImpl authServiceImpl) {
+        this.authServiceImpl = authServiceImpl;
     }
 
     @PostMapping("/login")
@@ -28,7 +28,7 @@ public class AuthenticationController {
             ipAddr = httpServletRequest.getRemoteAddr();
         }
         System.out.println("IP Address: " + ipAddr);
-        String token = authService.login(loginRequestDto.getEmail(), loginRequestDto.getPassword(),ipAddr);
+        String token = authServiceImpl.login(loginRequestDto.getEmail(), loginRequestDto.getPassword(),ipAddr);
         loginResponseDto.setMessage("Login successful");
         loginResponseDto.setResponseStatus(ResponseStatus.SUCCESS);
         MultiValueMap<String, String> headers = new LinkedMultiValueMap<>();
@@ -44,7 +44,7 @@ public class AuthenticationController {
             responseDto.setResponseStatus(ResponseStatus.INVALID_CREDENTIALS);
             return new ResponseEntity<>(responseDto, HttpStatus.BAD_REQUEST);
         }
-        authService.logout(token);
+        authServiceImpl.logout(token);
         responseDto.setMessage("Logout successful");
         responseDto.setResponseStatus(ResponseStatus.SUCCESS);
         return new ResponseEntity<>(responseDto, HttpStatus.OK);
@@ -58,7 +58,7 @@ public class AuthenticationController {
             responseDto.setResponseStatus(ResponseStatus.INVALID_CREDENTIALS);
             return new ResponseEntity<>(responseDto, HttpStatus.BAD_REQUEST);
         }
-        if (authService.validateToken(token)) {
+        if (authServiceImpl.validateToken(token)) {
             responseDto.setMessage("ok");
             responseDto.setResponseStatus(ResponseStatus.SUCCESS);
             return new ResponseEntity<>(responseDto, HttpStatus.OK);
@@ -71,7 +71,7 @@ public class AuthenticationController {
     @PostMapping("/sign_up")
     public ResponseEntity<?> doSignUp(@RequestBody SignUpRequestDto signUpRequestDto) {
         SignUpResponseDto signUpResponse = new SignUpResponseDto();
-        if (authService.signUp(signUpRequestDto.getEmail(), signUpRequestDto.getPassword())) {
+        if (authServiceImpl.signUp(signUpRequestDto.getEmail(), signUpRequestDto.getPassword())) {
             signUpResponse.setMessage("Sign up successful");
             signUpResponse.setResponseStatus(ResponseStatus.SUCCESS);
             return new ResponseEntity<>(signUpResponse, HttpStatus.CREATED);
