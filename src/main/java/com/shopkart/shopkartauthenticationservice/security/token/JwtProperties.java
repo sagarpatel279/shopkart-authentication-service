@@ -9,8 +9,8 @@ import org.springframework.stereotype.Component;
 @Setter
 @Component
 public class JwtProperties {
-    @Value("${jwt.token.key}")
-    private String secretKey;
+    @Value("${jwt.token.key.encoded.base64}")
+    private String encodedBase64Key;
     @Value("${jwt.token.expiration.time.days}")
     private int tokenExpirationDays = 7;
     @Value("${jwt.token.issuer}")

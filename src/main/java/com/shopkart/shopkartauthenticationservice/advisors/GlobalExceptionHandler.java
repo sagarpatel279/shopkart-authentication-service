@@ -1,12 +1,10 @@
 package com.shopkart.shopkartauthenticationservice.advisors;
 
 import com.shopkart.shopkartauthenticationservice.dtos.ApiResponse;
-import com.shopkart.shopkartauthenticationservice.dtos.ResponseStatus;
 import com.shopkart.shopkartauthenticationservice.exceptions.SessionExpiredException;
 import com.shopkart.shopkartauthenticationservice.exceptions.UnAuthorizedException;
 import com.shopkart.shopkartauthenticationservice.exceptions.UserAlreadyExistException;
 import com.shopkart.shopkartauthenticationservice.exceptions.UserNotFoundException;
-import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;

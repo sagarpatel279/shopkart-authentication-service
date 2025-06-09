@@ -10,4 +10,7 @@ public class DateUtility {
         LocalDateTime updated=now.plusDays(days);
         return Date.from(updated.atZone(ZoneId.systemDefault()).toInstant());
     }
+    public static Date getCurrentDate(){
+        return new Date(System.currentTimeMillis());
+    }
 }

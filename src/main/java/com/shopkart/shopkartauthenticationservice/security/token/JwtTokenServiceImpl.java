@@ -1,43 +1,55 @@
 package com.shopkart.shopkartauthenticationservice.security.token;
 
 import com.shopkart.shopkartauthenticationservice.utilities.DateUtility;
-import io.jsonwebtoken.Jwt;
-import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
+import io.jsonwebtoken.security.WeakKeyException;
+import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 
-import java.security.Key;
-import java.util.Base64;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.Map;
+import javax.crypto.SecretKey;
+import java.util.*;
 
 @Component
+@Primary
 public class JwtTokenServiceImpl implements ITokenService{
     private final JwtProperties jwtProperties;
-
+    private Jws<Claims> jwsClaims;
     public JwtTokenServiceImpl(JwtProperties jwtProperties){
         this.jwtProperties=jwtProperties;
     }
 
     @Override
-    public Map<String, Object> getAllClaimsFromToken(String token) {
-        return Map.of();
+    public Optional<Map<String, Object>> getAllClaimsFromToken(String token) {
+        try {
+            Claims claims = Jwts.parser()
+                    .verifyWith(getSigningKey())
+                    .build()
+                    .parseSignedClaims(token)
+                    .getPayload();
+            return Optional.of(new HashMap<>(claims));
+        } catch (JwtException e) {
+            return Optional.empty();
+        }
     }
 
     @Override
-    public String getSubjectFromToken(String token) {
-        return "";
-    }
-
-    @Override
-    public Date getExpirationDateFromToken(String token) {
-        return null;
+    public Optional<Date> getExpirationDateFromToken(String token) {
+        try {
+            Claims claims = Jwts.parser()
+                    .verifyWith(getSigningKey())
+                    .build()
+                    .parseSignedClaims(token)
+                    .getPayload();
+            return Optional.of(claims.getExpiration());
+        } catch (JwtException e) {
+            return Optional.empty();
+        }
     }
 
     @Override
     public String generateToken(Map<String, Object> claims) {
-        Date issuedAt=new Date();
+        Date issuedAt=DateUtility.getCurrentDate();
         return Jwts.builder()
                 .claims(claims)
                 .issuer(jwtProperties.getIssuer())
@@ -49,7 +61,7 @@ public class JwtTokenServiceImpl implements ITokenService{
 
     @Override
     public String generateToken() {
-        Date issuedAt=new Date();
+        Date issuedAt=DateUtility.getCurrentDate();
         return Jwts.builder()
                 .issuer(jwtProperties.getIssuer())
                 .issuedAt(issuedAt)
@@ -60,17 +72,41 @@ public class JwtTokenServiceImpl implements ITokenService{
 
     @Override
     public boolean validateToken(String token) {
+        try{
+            Jwts.parser()
+                    .verifyWith(getSigningKey())
+                    .build()
+                    .parseSignedClaims(token);
+            return true;
+        } catch (ExpiredJwtException e) {
+            System.out.println("Token expired");
+        } catch (JwtException e) {
+            System.out.println("Invalid token: " + e.getMessage());
+        }
         return false;
     }
 
     @Override
     public boolean isTokenExpired(String token) {
-        return false;
+        try{
+            Claims claims= Jwts.parser()
+                    .verifyWith(getSigningKey())
+                    .build()
+                    .parseSignedClaims(token).getPayload();
+            return claims.getExpiration().before(DateUtility.getCurrentDate());
+        } catch (ExpiredJwtException e) {
+            System.out.println("Token expired");
+            return true;
+        }
     }
 
-    private Key getSigningKey() {
-        byte[] keyBytes = Base64.getDecoder().decode(jwtProperties.getSecretKey());
-        return Keys.hmacShaKeyFor(keyBytes);
+    private SecretKey getSigningKey() {
+        try {
+            byte[] keyBytes = Base64.getDecoder().decode(jwtProperties.getEncodedBase64Key());
+            return Keys.hmacShaKeyFor(keyBytes);
+        } catch (WeakKeyException e) {
+            throw new IllegalStateException("The secret key is too weak. It must be at least 256 bits.", e);
+        }
     }
 
 }

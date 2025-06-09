@@ -1,211 +1,101 @@
 package com.shopkart.shopkartauthenticationservice.services;
 
-import com.shopkart.shopkartauthenticationservice.exceptions.SessionExpiredException;
-import com.shopkart.shopkartauthenticationservice.exceptions.UnAuthorizedException;
-import com.shopkart.shopkartauthenticationservice.exceptions.UserAlreadyExistException;
-import com.shopkart.shopkartauthenticationservice.exceptions.UserNotFoundException;
-import com.shopkart.shopkartauthenticationservice.models.Session;
+import com.shopkart.shopkartauthenticationservice.dtos.LoginResponseRecord;
+import com.shopkart.shopkartauthenticationservice.dtos.SingUpResponseRecord;
+import com.shopkart.shopkartauthenticationservice.dtos.UserRecord;
+import com.shopkart.shopkartauthenticationservice.dtos.ValidateTokenResponseRecord;
+import com.shopkart.shopkartauthenticationservice.exceptions.*;
+import com.shopkart.shopkartauthenticationservice.models.Role;
 import com.shopkart.shopkartauthenticationservice.models.User;
-import com.shopkart.shopkartauthenticationservice.repositories.RoleRepository;
-import com.shopkart.shopkartauthenticationservice.repositories.SessionRepository;
 import com.shopkart.shopkartauthenticationservice.repositories.UserRepository;
-import com.shopkart.shopkartauthenticationservice.utilities.UUIDGenerator;
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.ExpiredJwtException;
-import io.jsonwebtoken.JwtException;
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.security.Keys;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import com.shopkart.shopkartauthenticationservice.security.password.IPasswordService;
+import com.shopkart.shopkartauthenticationservice.security.token.ITokenService;
 import org.springframework.stereotype.Service;
 
-import java.security.Key;
 import java.util.*;
 
 
 @Service
 public class AuthServiceImpl implements IAuthServices {
     private final UserRepository userRepository;
-    private final RoleRepository roleRepository;
-    private final SessionRepository sessionRepository;
-    private final BCryptPasswordEncoder bCryptPasswordEncoder;
-    @Value("${jwt.token.key}")
-    private String SECRET_KEY;
-    @Value("${jwt.token.expiration.time}")
-    private long EXPIRATION_TIME;
-
-    public AuthServiceImpl(UserRepository userRepository, RoleRepository roleRepository, SessionRepository sessionRepository, BCryptPasswordEncoder bCryptPasswordEncoder) {
+    private final ITokenService tokenService;
+    private final IPasswordService passwordService;
+    private final ISessionServices sessionServices;
+    public AuthServiceImpl(UserRepository userRepository, ITokenService tokenService,
+                           IPasswordService passwordService, ISessionServices sessionServices) {
         this.userRepository = userRepository;
-        this.roleRepository = roleRepository;
-        this.sessionRepository = sessionRepository;
-        this.bCryptPasswordEncoder = bCryptPasswordEncoder;
+        this.tokenService=tokenService;
+        this.passwordService=passwordService;
+        this.sessionServices=sessionServices;
     }
 
     @Override
-    public String login(String email, String password, String ipAddr) {
-        Optional<User> userOptional = userRepository.findByEmail(email);
-        if (userOptional.isEmpty()) {
-            throw new UserNotFoundException("User not found");
-        }
-        if (!bCryptPasswordEncoder.matches(password, userOptional.get().getPasswordSalt())) {
-            throw new UnAuthorizedException("Invalid Password..!");
-        }
-        User user = userOptional.get();
-        List<Session> sessions = sessionRepository.findAllActiveSessionsByUserId(user.getUuid());
-        if (sessions != null && !sessions.isEmpty()) {
-            if (sessions.size() >= 2) {
-                System.out.println(sessions.size() + " sessions founds...!");//future
-            }
-            sessions = sessions.stream().filter(sess -> sess.getIpAddress().equals(ipAddr)).toList();
-            if (!sessions.isEmpty()) {
-                if (sessions.size() > 1) {
-                    for (int i = 1; i < sessions.size(); i++) {
-                        Session session = sessions.get(i);
-                        session.setIsDeleted(true);
-                        sessionRepository.save(session);
-                    }
-                }
-                Session session = sessions.get(0);
-                String token = session.getToken();
-                if (isTokenValid(token)) {
-                    return token;
-                }
-                throw new SessionExpiredException("Session Expired..!");
-            }
-        }
-        UUID uuid = UUIDGenerator.generateUUID();
-        Session session = new Session();
-        session.setUser(user);
-        session.setIpAddress(ipAddr);
-        session.setDeviceId(uuid.toString());
-        session = sessionRepository.save(session);
-        Map<String, Object> claimsMap = new HashMap<>();
-        claimsMap.put("sid", session.getUuid());
-        claimsMap.put("uid", user.getUuid());
-        claimsMap.put("did", uuid.toString());
-        claimsMap.put("email", user.getEmail());
-        claimsMap.put("roles", user.getRoles());
-        String jwsToken = generateToken(claimsMap);
-        session.setToken(jwsToken);
-        sessionRepository.save(session);
-        return jwsToken;
+    public SingUpResponseRecord signup(String email, String password) {
+        boolean isUserExist=userRepository.existsByEmail(email);
+        if(isUserExist)
+            throw new UserAlreadyExistException("User is already exist with email: "+email);
+        User user = new User();
+        user.setEmail(email);
+        user.setPasswordSalt(passwordService.generateSaltPassword(password));
+        user=userRepository.save(user);
+        return new SingUpResponseRecord(from(user));
+    }
+
+    @Override
+    public LoginResponseRecord login(String email, String password) {
+        Optional<User> userOptional=userRepository.findByEmail(email);
+        if(userOptional.isEmpty())
+            throw new UserNotFoundException("User could not be found by email: "+email);
+        User user=userOptional.get();
+        if(passwordService.matches(user.getPasswordSalt(),password))
+            throw new UnAuthorizedException("Invalid username or password...");
+        String token =tokenService.generateToken(userToClaims(user));
+        sessionServices.addSession(user,token);
+        return new LoginResponseRecord(token);
     }
 
     @Override
     public void logout(String token) {
-        Claims claims = null;
-        try {
-            claims = getClaimsFromToken(token);
-        } catch (ExpiredJwtException jwe) {
-            UUID sessionId = jwe.getClaims().get("sid", UUID.class);
-            if (deleteTokenFromDb(sessionId))
-                throw new SessionExpiredException("Session Expired..!");
-            throw new UnAuthorizedException("Invalid token");
-        } catch (JwtException je) {
-            throw new UnAuthorizedException("Invalid token");
-        } catch (Exception e) {
-            throw new RuntimeException("Something went wrong!");
+        if(tokenService.validateToken(token)){
+            throw new InvalidTokenException("Invalid or Expired session token, Login again...");
         }
-        if (claims == null) {
-            throw new UnAuthorizedException("Invalid Token");
-        }
-        UUID sessionId = claims.get("sid", UUID.class);
-        Optional<Session> sessionOptional = sessionRepository.findById(sessionId);
-        if (sessionOptional.isEmpty() || sessionOptional.get().getIsDeleted()) {
-            throw new SessionExpiredException("Session is no longer available");
-        }
+        Optional<Map<String,Object>> claimsOptional=tokenService.getAllClaimsFromToken(token);
+        if(claimsOptional.isEmpty())
+            throw new RuntimeException("Something went wrong, please login again...");
 
-        Session session = sessionOptional.get();
-        session.setIsDeleted(true);
-        sessionRepository.save(session);
+        Map<String,Object> claims=claimsOptional.get();
+        User user=claimsToUser(claims);
+
+        sessionServices.deactivateSessionByUserId(user.getUuid());
     }
 
     @Override
-    public boolean validateToken(String token) {
-        if (!isTokenValid(token)) {
-            return false;
-        }
-        Claims claims = null;
-        try {
-            claims = getClaimsFromToken(token);
-        }catch (ExpiredJwtException jwe) {
-            UUID sessionId = jwe.getClaims().get("sid", UUID.class);
-            if (deleteTokenFromDb(sessionId))
-                throw new SessionExpiredException("Session Expired..!");
-            throw new UnAuthorizedException("Invalid token");
-        } catch (JwtException je) {
-            throw new UnAuthorizedException("Invalid token");
-        } catch (Exception e) {
-            throw new RuntimeException("Something went Wrong..!");
-        }
-        if (claims == null) {
-            throw new UnAuthorizedException("Invalid Token");
-        }
-        UUID sessionId = claims.get("sid", UUID.class);
-        Optional<Session> sessionOptional = sessionRepository.findById(sessionId);
-        if (sessionOptional.isEmpty() || sessionOptional.get().getIsDeleted()) {
-            throw new UnAuthorizedException("Session is no longer available");
-        }
-        return true;
+    public ValidateTokenResponseRecord validate(String token) {
+        return null;
     }
 
-    @Override
-    public boolean signUp(String email, String password) {
-        boolean isUserExist = userRepository.existsByEmail(email);
-        if (isUserExist) {
-            throw new UserAlreadyExistException("User already register");
-        }
-        User user = new User();
-        user.setEmail(email);
-        user.setPasswordSalt(bCryptPasswordEncoder.encode(password));
-        userRepository.save(user);
-        return true;
+    private UserRecord from(User user){
+        return new UserRecord(user.getUuid().toString(),user.getEmail(),rolesToString(user.getRoles()));
+    }
+    private List<String> rolesToString(List<Role> roles){
+        return roles.stream().map(Role::getRoleName).toList();
     }
 
-    public boolean deleteTokenFromDb(UUID sessionId) {
-        Optional<Session> sessionOptional = sessionRepository.findById(sessionId);
-        if (sessionOptional.isPresent() && !sessionOptional.get().getIsDeleted()) {
-            Session session = sessionOptional.get();
-            session.setIsDeleted(true);
-            sessionRepository.save(session);
-            return true;
-        }
-        return false;
+    private List<Role> rolesFromString(List<String> roleNames){
+        return roleNames.stream().map(Role::new).toList();
     }
-    private String generateToken(Map<String, ?> claimsMap) {
-        return Jwts.builder().claims(claimsMap)
-                .expiration(new Date(System.currentTimeMillis() + EXPIRATION_TIME))
-                .issuedAt(new Date())
-                .signWith(getSigningKey())
-                .compact();
+    private Map<String,Object> userToClaims(User user){
+        Map<String,Object> claims=new HashMap<>();
+        claims.put("sub",user.getUuid());
+        claims.put("user",user.getEmail());
+        claims.put("roles",rolesToString(user.getRoles()));
+        return claims;
     }
-
-    private Key getSigningKey() {
-        byte[] keyBytes = Base64.getDecoder().decode(SECRET_KEY);
-        return Keys.hmacShaKeyFor(keyBytes);
-    }
-
-    private boolean isTokenValid(String token) {
-        try {
-            Claims claims = getClaimsFromToken(token);
-            return !claims.getExpiration().before(new Date(System.currentTimeMillis()));
-        } catch (ExpiredJwtException eje) {
-            UUID sessionId = eje.getClaims().get("sid", UUID.class);
-            if (deleteTokenFromDb(sessionId))
-                throw new SessionExpiredException("Token Expired-Utility");
-            throw new UnAuthorizedException("Invalid Token - Utility-2");
-        } catch (JwtException je) {
-            throw new UnAuthorizedException("Invalid Token-Utility");
-        } catch (Exception e) {
-            throw new RuntimeException("Something went wrong-Utility");
-        }
-    }
-
-    private Claims getClaimsFromToken(String token) {
-        return Jwts.parser()
-                .setSigningKey(getSigningKey())
-                .build()
-                .parseClaimsJws(token)
-                .getBody();
+    private User claimsToUser(Map<String,Object> claims){
+        User user=new User();
+        user.setUuid((UUID) claims.get("sub"));
+        user.setEmail((String) claims.get("user"));
+        user.setRoles(rolesFromString((List<String>) claims.get("roles")));
+        return user;
     }
 }
