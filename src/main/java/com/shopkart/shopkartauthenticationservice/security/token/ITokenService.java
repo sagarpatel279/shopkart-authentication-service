@@ -7,4 +7,5 @@ import java.util.Optional;
 public interface ITokenService extends ITokenGenerator,ITokenValidator{
     Optional<Map<String, Object>> getAllClaimsFromToken(String token);
     Optional<Date> getExpirationDateFromToken(String token);
+    String getSubjectFromToken(String token);
 }

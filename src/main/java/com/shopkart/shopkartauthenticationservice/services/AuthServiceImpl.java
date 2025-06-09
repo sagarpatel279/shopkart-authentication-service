@@ -2,20 +2,22 @@ package com.shopkart.shopkartauthenticationservice.services;
 
 import com.shopkart.shopkartauthenticationservice.dtos.LoginResponseRecord;
 import com.shopkart.shopkartauthenticationservice.dtos.SingUpResponseRecord;
-import com.shopkart.shopkartauthenticationservice.dtos.UserRecord;
 import com.shopkart.shopkartauthenticationservice.dtos.ValidateTokenResponseRecord;
 import com.shopkart.shopkartauthenticationservice.exceptions.*;
-import com.shopkart.shopkartauthenticationservice.models.Role;
+import com.shopkart.shopkartauthenticationservice.models.SessionState;
 import com.shopkart.shopkartauthenticationservice.models.User;
 import com.shopkart.shopkartauthenticationservice.repositories.UserRepository;
 import com.shopkart.shopkartauthenticationservice.security.password.IPasswordService;
 import com.shopkart.shopkartauthenticationservice.security.token.ITokenService;
+import com.shopkart.shopkartauthenticationservice.security.token.TokenState;
+import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
 
 
 @Service
+@Primary
 public class AuthServiceImpl implements IAuthServices {
     private final UserRepository userRepository;
     private final ITokenService tokenService;
@@ -38,7 +40,7 @@ public class AuthServiceImpl implements IAuthServices {
         user.setEmail(email);
         user.setPasswordSalt(passwordService.generateSaltPassword(password));
         user=userRepository.save(user);
-        return new SingUpResponseRecord(from(user));
+        return new SingUpResponseRecord(User.toUserRecord(user));
     }
 
     @Override
@@ -49,53 +51,49 @@ public class AuthServiceImpl implements IAuthServices {
         User user=userOptional.get();
         if(passwordService.matches(user.getPasswordSalt(),password))
             throw new UnAuthorizedException("Invalid username or password...");
-        String token =tokenService.generateToken(userToClaims(user));
+        String token =tokenService.generateToken(User.toClaims(user));
         sessionServices.addSession(user,token);
         return new LoginResponseRecord(token);
     }
 
     @Override
     public void logout(String token) {
-        if(tokenService.validateToken(token)){
-            throw new InvalidTokenException("Invalid or Expired session token, Login again...");
-        }
-        Optional<Map<String,Object>> claimsOptional=tokenService.getAllClaimsFromToken(token);
-        if(claimsOptional.isEmpty())
-            throw new RuntimeException("Something went wrong, please login again...");
-
-        Map<String,Object> claims=claimsOptional.get();
-        User user=claimsToUser(claims);
-
-        sessionServices.deactivateSessionByUserId(user.getUuid());
+        User user=getUserByValidatingToken(token);
+        sessionServices.changeSessionState(user.getUuid(),SessionState.INACTIVE);
     }
 
     @Override
     public ValidateTokenResponseRecord validate(String token) {
-        return null;
+        User user=getUserByValidatingToken(token);
+        Optional<SessionState> sessionStateOptional=sessionServices.getSessionStateByUserId(user.getUuid());
+        if(sessionStateOptional.isEmpty())
+            throw new SessionNotFoundException("No session is found");
+        SessionState sessionState=sessionStateOptional.get();
+
+        if(sessionState==SessionState.INACTIVE) {
+            throw new InactiveSessionException("User has logged out");
+        }else if(sessionState==SessionState.EXPIRED) {
+            throw new SessionExpiredException("Login has expired");
+        }
+        return new ValidateTokenResponseRecord(User.toUserRecord(user));
     }
 
-    private UserRecord from(User user){
-        return new UserRecord(user.getUuid().toString(),user.getEmail(),rolesToString(user.getRoles()));
-    }
-    private List<String> rolesToString(List<Role> roles){
-        return roles.stream().map(Role::getRoleName).toList();
+    private User getUserByValidatingToken(String token){
+        TokenState tokenState=tokenService.validateToken(token);
+        if(tokenState == TokenState.INVALID_SIGNATURE){
+            throw new InvalidTokenException("Invalid login token");
+        }
+        if(tokenState==TokenState.EXPIRED){
+            sessionServices.changeSessionState(UUID.fromString(tokenService.getSubjectFromToken(token)),SessionState.EXPIRED);
+            throw new ExpiredTokenException("Login has expired");
+        }
+        Optional<Map<String,Object>> claimsOptional=tokenService.getAllClaimsFromToken(token);
+        if(claimsOptional.isEmpty())
+            throw new RuntimeException("Something went wrong to log out");
+
+        Map<String,Object> claims=claimsOptional.get();
+        return User.toUser(claims);
     }
 
-    private List<Role> rolesFromString(List<String> roleNames){
-        return roleNames.stream().map(Role::new).toList();
-    }
-    private Map<String,Object> userToClaims(User user){
-        Map<String,Object> claims=new HashMap<>();
-        claims.put("sub",user.getUuid());
-        claims.put("user",user.getEmail());
-        claims.put("roles",rolesToString(user.getRoles()));
-        return claims;
-    }
-    private User claimsToUser(Map<String,Object> claims){
-        User user=new User();
-        user.setUuid((UUID) claims.get("sub"));
-        user.setEmail((String) claims.get("user"));
-        user.setRoles(rolesFromString((List<String>) claims.get("roles")));
-        return user;
-    }
+
 }

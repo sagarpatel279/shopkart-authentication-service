@@ -48,6 +48,12 @@ public class JwtTokenServiceImpl implements ITokenService{
     }
 
     @Override
+    public String getSubjectFromToken(String token) {
+        Optional<Map<String,Object>> optionalMap = getAllClaimsFromToken(token);
+        return optionalMap.isEmpty()?"": (String) optionalMap.get().get("sub");
+    }
+
+    @Override
     public String generateToken(Map<String, Object> claims) {
         Date issuedAt=DateUtility.getCurrentDate();
         return Jwts.builder()
@@ -71,19 +77,18 @@ public class JwtTokenServiceImpl implements ITokenService{
     }
 
     @Override
-    public boolean validateToken(String token) {
+    public TokenState validateToken(String token) {
         try{
             Jwts.parser()
                     .verifyWith(getSigningKey())
                     .build()
                     .parseSignedClaims(token);
-            return true;
+            return TokenState.VALID;
         } catch (ExpiredJwtException e) {
-            System.out.println("Token expired");
+            return TokenState.EXPIRED;
         } catch (JwtException e) {
-            System.out.println("Invalid token: " + e.getMessage());
+            return TokenState.INVALID_SIGNATURE;
         }
-        return false;
     }
 
     @Override
@@ -95,7 +100,6 @@ public class JwtTokenServiceImpl implements ITokenService{
                     .parseSignedClaims(token).getPayload();
             return claims.getExpiration().before(DateUtility.getCurrentDate());
         } catch (ExpiredJwtException e) {
-            System.out.println("Token expired");
             return true;
         }
     }
