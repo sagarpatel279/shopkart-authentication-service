@@ -6,7 +6,7 @@ import com.fasterxml.jackson.annotation.JsonFormat;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 
-public record ApiResponse<T>
+public record ApiResponseRecord<T>
         (T data,
          String message,
          int status) {
