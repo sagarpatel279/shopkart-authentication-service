@@ -9,4 +9,5 @@ public interface ISessionServices {
     Session save(Session session);
     void changeSessionState(UUID sessionId, SessionState sessionState);
     SessionState getSessionStateBySessionId(UUID sessionId);
+    void deleteBySessionId(UUID uuid);
 }

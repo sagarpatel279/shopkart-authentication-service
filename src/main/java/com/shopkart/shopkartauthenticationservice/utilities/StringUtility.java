@@ -33,6 +33,6 @@ public class StringUtility {
     }
 
     public static void main(String[] args) {
-        System.out.println(random(64));
+        System.out.println(random(40));
     }
 }

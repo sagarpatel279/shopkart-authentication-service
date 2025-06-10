@@ -39,7 +39,7 @@ public class AuthServiceImpl implements IAuthServices {
 
     @Override
     public SignUpResponseRecord signup(String email, String password) {
-        boolean isUserExist=userRepository.existsByEmail(email);
+        boolean isUserExist=userRepository.existsByEmailAndIsDeletedIsFalse(email);
         if(isUserExist)
             throw new UserAlreadyExistException("User is already exist with email: "+email);
         User user = new User();
@@ -51,27 +51,25 @@ public class AuthServiceImpl implements IAuthServices {
 
     @Override
     public LoginResponseRecord login(String email, String password) {
-        Optional<User> userOptional=userRepository.findByEmail(email);
+        Optional<User> userOptional=userRepository.findByEmailAndIsDeletedIsFalse(email);
         if(userOptional.isEmpty())
             throw new UserNotFoundException("User could not be found by email: "+email);
 
         User user=userOptional.get();
-        if(passwordEncoder.matches(password,user.getPasswordSalt()))
+        if(!passwordEncoder.matches(password,user.getPasswordSalt()))
             throw new UnAuthorizedException("Invalid username or password...");
 
         Session session=new Session();
         session.setUser(user);
         session.setSessionState(SessionState.ACTIVE);
         session=sessionServices.save(session);
-
-
-        String token =setJwtTokenGenerationServiceAndGenerateToken(session);
-
+        String token = setJwtTokenGenerationServiceAndGenerateToken(session);
         session.setToken(token);
         sessionServices.save(session);
 
         return new LoginResponseRecord(token);
     }
+
 
     private String setJwtTokenGenerationServiceAndGenerateToken(Session session){
         if(jwtTokenGenerationService==null){
@@ -95,7 +93,7 @@ public class AuthServiceImpl implements IAuthServices {
     @Override
     public ValidateTokenResponseRecord validate(String token) {
         User user=getUserByValidatingToken(token);
-        SessionState sessionState=sessionServices.getSessionStateBySessionId(user.getUuid());
+        SessionState sessionState=sessionServices.getSessionStateBySessionId(UUID.fromString(jwtTokenParseService.getSessionId()));
 
         if(sessionState==SessionState.INACTIVE) {
             throw new InactiveSessionException("User has logged out");

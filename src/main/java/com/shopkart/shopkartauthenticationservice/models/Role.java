@@ -18,10 +18,12 @@ public class Role extends BaseModel {
         this.roleName=name;
     }
     public static List<String> toListOfString(List<Role> roles){
+        if(roles==null || roles.isEmpty()) return List.of();
         return roles.stream().map(Role::getRoleName).toList();
     }
 
     public static List<Role> toListOfRole(List<String> roleNames){
+        if(roleNames==null || roleNames.isEmpty()) return List.of();
         return roleNames.stream().map(Role::new).toList();
     }
 }

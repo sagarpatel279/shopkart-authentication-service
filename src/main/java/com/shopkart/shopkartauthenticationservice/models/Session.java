@@ -1,9 +1,6 @@
 package com.shopkart.shopkartauthenticationservice.models;
 
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.ManyToOne;
+import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -17,6 +14,7 @@ import java.util.Date;
 public class Session extends BaseModel{
     @ManyToOne
     private User user;
+    @Column(length = 2000)
     private String token;
     @Enumerated(EnumType.ORDINAL)
     private SessionState sessionState;

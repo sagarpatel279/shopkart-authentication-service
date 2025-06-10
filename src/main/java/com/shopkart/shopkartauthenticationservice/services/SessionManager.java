@@ -38,6 +38,13 @@ public class SessionManager implements ISessionServices{
         return getSessionById(sessionId).getSessionState();
     }
 
+    @Override
+    public void deleteBySessionId(UUID sessionId) {
+        boolean isSessionExist= sessionRepository.existsByUuid(sessionId);
+        if(isSessionExist)
+            sessionRepository.deleteByUuid(sessionId);
+    }
+
     private Session getSessionById(UUID sessionId){
         Optional<Session> sessionOptional= sessionRepository.findByUuidAndIsDeletedIsFalse(sessionId);
         if(sessionOptional.isEmpty())
