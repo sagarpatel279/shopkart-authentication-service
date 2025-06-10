@@ -25,7 +25,7 @@ public class User extends BaseModel{
     }
     public static User toUser(Map<String,Object> claims){
         User user=new User();
-        user.setUuid(UUID.fromString((String) claims.get("sub")));
+        user.setUuid(UUID.fromString((String) claims.get("uid")));
         user.setEmail((String) claims.get("email"));
         Object rolesObject = claims.get("roles");
         List<String> roles;
@@ -42,7 +42,7 @@ public class User extends BaseModel{
     }
     public static Map<String,Object> toClaims(User user){
         Map<String,Object> claims=new HashMap<>();
-        claims.put("sub",user.getUuid());
+        claims.put("uid",user.getUuid());
         claims.put("email",user.getEmail());
         claims.put("roles",Role.toListOfString(user.getRoles()));
         return claims;

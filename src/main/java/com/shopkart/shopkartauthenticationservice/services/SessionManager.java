@@ -1,8 +1,8 @@
 package com.shopkart.shopkartauthenticationservice.services;
 
+import com.shopkart.shopkartauthenticationservice.exceptions.SessionNotFoundException;
 import com.shopkart.shopkartauthenticationservice.models.Session;
 import com.shopkart.shopkartauthenticationservice.models.SessionState;
-import com.shopkart.shopkartauthenticationservice.models.User;
 import com.shopkart.shopkartauthenticationservice.repositories.SessionRepository;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Service;
@@ -13,7 +13,6 @@ import java.util.UUID;
 @Service
 @Primary
 public class SessionManager implements ISessionServices{
-
     private SessionRepository sessionRepository;
 
     public SessionManager(SessionRepository sessionRepository){
@@ -21,22 +20,28 @@ public class SessionManager implements ISessionServices{
     }
 
     @Override
-    public void addSession(User user, String token) {
-        Session session=new Session();
-        session.setUser(user);
-        session.setToken(token);
-        session.setSessionState(SessionState.ACTIVE);
-        sessionRepository.save(session);
+    public Session save(Session session) {
+        return sessionRepository.save(session);
     }
 
     @Override
-    public void changeSessionState(UUID userId, SessionState sessionState) {
-//        Optional<Session> sessionOptional=
+    public void changeSessionState(UUID sessionId, SessionState sessionState) {
+        Session session=getSessionById(sessionId);
+        if(session.getSessionState()!=sessionState){
+            session.setSessionState(sessionState);
+            sessionRepository.save(session);
+        }
     }
 
     @Override
-    public Optional<SessionState> getSessionStateByUserId(UUID userId) {
-        return null;
+    public SessionState getSessionStateBySessionId(UUID sessionId) {
+        return getSessionById(sessionId).getSessionState();
     }
 
+    private Session getSessionById(UUID sessionId){
+        Optional<Session> sessionOptional= sessionRepository.findByUuidAndIsDeletedIsFalse(sessionId);
+        if(sessionOptional.isEmpty())
+            throw new SessionNotFoundException("Session could not be found");
+        return sessionOptional.get();
+    }
 }

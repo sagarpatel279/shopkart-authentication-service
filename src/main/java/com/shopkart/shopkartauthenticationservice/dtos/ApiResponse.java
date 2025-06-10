@@ -1,16 +1,15 @@
 package com.shopkart.shopkartauthenticationservice.dtos;
 
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import com.fasterxml.jackson.annotation.JsonFormat;
 
-@Setter
-@Getter
-@AllArgsConstructor
-@NoArgsConstructor
-public class ApiResponse<T> {
-    private String messageTitle;
-    private T data;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+
+public record ApiResponse<T>
+        (T data,
+         String message,
+         int status) {
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss z")
+    private static final ZonedDateTime timestamp = ZonedDateTime.now(ZoneId.systemDefault());
 }
