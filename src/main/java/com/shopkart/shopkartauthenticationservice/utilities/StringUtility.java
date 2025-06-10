@@ -1,6 +1,7 @@
 package com.shopkart.shopkartauthenticationservice.utilities;
 
 import java.security.SecureRandom;
+import java.util.UUID;
 
 public class StringUtility {
     public static String random(int count){
@@ -33,6 +34,7 @@ public class StringUtility {
     }
 
     public static void main(String[] args) {
-        System.out.println(random(40));
+//            System.out.println(random(40));
+        System.out.println(UUID.randomUUID());
     }
 }
